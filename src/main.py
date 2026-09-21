@@ -135,6 +135,29 @@ def search_web(query, max_results=6):
     except Exception as e:
         return f"WEB_SEARCH_ERROR: {e}"
 
+def write_project_file(path, content):
+    """Write a text file inside the current Akash AI project workspace."""
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[1]
+    target = (root / path).resolve()
+    if root not in target.parents and target != root:
+        return "BLOCKED: path escapes the project."
+    if any(part in {".git", ".venv", "__pycache__"} for part in target.parts):
+        return "BLOCKED: protected path."
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text(content, encoding="utf-8")
+    return f"WROTE {target.relative_to(root)} ({len(content)} bytes)"
+
+def read_project_file(path):
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[1]
+    target = (root / path).resolve()
+    if root not in target.parents and target != root:
+        return "BLOCKED: path escapes the project."
+    if not target.is_file():
+        return f"NOT_FOUND: {path}"
+    return target.read_text(encoding="utf-8")[:30000]
+
 def run_shell(command):
     blocked = [
         r"\brm\\s+-rf\\b", r"\bmkfs\\b", r"\bdd\\s+if=",
@@ -156,6 +179,23 @@ def run_shell(command):
         return f"Command failed: {e}"
 
 TOOLS = [
+    {
+        "type": "function",
+        "function": {
+            "name": "write_project_file",
+            "description": "Create or replace a source/config text file inside the project. Use this to build software.",
+            "parameters": {"type": "object", "properties": {"path": {"type": "string"}, "content": {"type": "string"}}, "required": ["path", "content"]}
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "read_project_file",
+            "description": "Read a project text file before modifying it.",
+            "parameters": {"type": "object", "properties": {"path": {"type": "string"}}, "required": ["path"]}
+        },
+    },
+
     {
         "type": "function",
         "function": {
@@ -209,7 +249,11 @@ def request_model(messages, use_tools=False):
 
 
 # --- Autonomous agent ------------------------------------------------------
-AGENT_SYSTEM = "You are the Akash AI task planner. Break requests into executable steps, use tools when needed, verify important results, and give a concise final answer. Never claim success without evidence."
+AGENT_SYSTEM = """You are Akash AI Builder. BUILD working software, not ideas.
+Inspect the repository, create/edit actual files, run tests/builds, inspect failures, fix them, and repeat.
+For a monetizable product, choose a small paid workflow with a clear buyer and implement a usable MVP.
+Never claim deployment, customers, payments, or revenue without evidence.
+Prefer a complete small product over a large unfinished architecture."""
 
 def execute_agent_task(task):
     messages = [{"role": "system", "content": AGENT_SYSTEM}, {"role": "user", "content": task}]
@@ -225,6 +269,10 @@ def execute_agent_task(task):
                 args = json.loads(call["function"].get("arguments") or "{}")
                 if name == "search_web":
                     result = search_web(args["query"], args.get("max_results", 6))
+                elif name == "write_project_file":
+                    result = write_project_file(args["path"], args["content"])
+                elif name == "read_project_file":
+                    result = read_project_file(args["path"])
                 elif name == "run_shell":
                     result = run_shell(args["command"])
                 else:
@@ -308,7 +356,14 @@ def chat(message):
                     result = "Already executed. Use the previous result and answer."
                 else:
                     used_calls.add(key)
-                    result = search_web(args["query"], args.get("max_results", 6)) if name == "search_web" else run_shell(args["command"])
+                    if name == "search_web":
+                        result = search_web(args["query"], args.get("max_results", 6))
+                    elif name == "write_project_file":
+                        result = write_project_file(args["path"], args["content"])
+                    elif name == "read_project_file":
+                        result = read_project_file(args["path"])
+                    else:
+                        result = run_shell(args["command"])
             except Exception as e:
                 result = f"Tool error: {e}"
             messages.append(
@@ -322,7 +377,7 @@ def main():
     print("Akash AI — online")
     print(f"Model: {MODEL}")
     print("Memory: enabled | Web: live news + search | Shell: safe mode")
-    print("Commands: /help, /money, /money <problem>, /memory, /remember <fact>, /clear, /web <query>, /agent <task>, /background <task>, /webui, exit")
+    print("Commands: /help, /build, /build <product>, /agent <task>, /money, /memory, /remember <fact>, /clear, /web <query>, /background <task>, /webui, exit")
 
     while True:
         try:
@@ -341,6 +396,21 @@ def main():
                 topic = message[7:].strip()
                 print("\nAkash AI > Money Factory started for: " + topic)
                 print(run_money_factory(topic))
+                continue
+            if message == "/build":
+                print("\nAkash AI > Builder agent started. It will inspect, build, test, and repair the product.")
+                print(execute_agent_task(
+                    "Build a complete small monetizable web MVP inside this repository. "
+                    "Do not return an idea or business plan. Inspect the repo first, choose one simple B2B paid workflow, "
+                    "implement the actual source code, landing page, core workflow, local persistence, pricing page, README, and tests. "
+                    "Use dependencies practical on Android/Termux. Run tests and repair failures before finishing."
+                ))
+                continue
+            if message.startswith("/build "):
+                print("\nAkash AI > Builder agent started.")
+                print(execute_agent_task(message[7:].strip() +
+                    "\nIMPORTANT: build the actual software in this repository. Do not just research or write a plan. "
+                    "Create files, run tests, fix failures, and leave a runnable MVP."))
                 continue
             if message == "/help":
                 print("\nAsk normally. Examples:")
