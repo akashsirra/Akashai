@@ -10,7 +10,7 @@ from urllib.parse import quote
 import httpx
 from dotenv import load_dotenv
 
-from memory import init_db, save_message, get_recent_messages, clear_memory
+from memory import init_db, save_message, get_recent_messages, get_facts, clear_memory
 
 load_dotenv()
 
@@ -261,8 +261,10 @@ def answer_with_web(message):
         "Do not say you cannot search when results are present. Do not invent missing details.\n\n"
         f"SEARCH RESULTS:\n{results}"
     )
+    facts = get_facts(30)
+    fact_context = ("Known facts about Akash:\n- " + "\n- ".join(facts)) if facts else ""
     messages = [
-        {"role": "system", "content": SYSTEM},
+        {"role": "system", "content": SYSTEM + ("\n\n" + fact_context if fact_context else "")},
         *get_recent_messages(10),
         {"role": "user", "content": message},
         {"role": "system", "content": prompt},
@@ -320,7 +322,7 @@ def main():
     print("Akash AI — online")
     print(f"Model: {MODEL}")
     print("Memory: enabled | Web: live news + search | Shell: safe mode")
-    print("Commands: /help, /memory, /clear, /web <query>, /agent <task>, /background <task>, exit")
+    print("Commands: /help, /memory, /remember <fact>, /clear, /web <query>, /agent <task>, /background <task>, /webui, exit")
 
     while True:
         try:
@@ -338,6 +340,20 @@ def main():
                 continue
             if message == "/memory":
                 print(f"\nStored messages: {len(get_recent_messages(100000))}")
+                facts = get_facts(100)
+                print("Known facts:")
+                for fact in facts:
+                    print(" - " + fact)
+                continue
+            if message.startswith("/remember "):
+                from memory import remember_fact
+                fact = message[10:].strip()
+                remember_fact(fact)
+                print("\nAkash AI > Remembered.")
+                continue
+            if message == "/webui":
+                from web import serve
+                serve()
                 continue
             if message == "/clear":
                 clear_memory()
