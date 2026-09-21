@@ -2,6 +2,7 @@ import json
 import os
 import re
 import subprocess
+import threading
 import xml.etree.ElementTree as ET
 from html import unescape
 from urllib.parse import quote
@@ -206,6 +207,41 @@ def request_model(messages, use_tools=False):
     data = r.json()
     return data["choices"][0]["message"]
 
+
+# --- Autonomous agent ------------------------------------------------------
+AGENT_SYSTEM = "You are the Akash AI task planner. Break requests into executable steps, use tools when needed, verify important results, and give a concise final answer. Never claim success without evidence."
+
+def execute_agent_task(task):
+    messages = [{"role": "system", "content": AGENT_SYSTEM}, {"role": "user", "content": task}]
+    for _ in range(8):
+        assistant = request_model(messages, use_tools=True)
+        calls = assistant.get("tool_calls") or []
+        if not calls:
+            return assistant.get("content") or "Task completed with no final response."
+        messages.append(assistant)
+        for call in calls:
+            try:
+                name = call["function"]["name"]
+                args = json.loads(call["function"].get("arguments") or "{}")
+                if name == "search_web":
+                    result = search_web(args["query"], args.get("max_results", 6))
+                elif name == "run_shell":
+                    result = run_shell(args["command"])
+                else:
+                    result = "Unknown tool."
+            except Exception as e:
+                result = f"Tool error: {e}"
+            messages.append({"role": "tool", "tool_call_id": call["id"], "content": result})
+    return "Agent reached its safety step limit."
+
+def background_task(task):
+    def worker():
+        try:
+            print("\\n\\n[Akash AI background task]\\n" + execute_agent_task(task) + "\\n")
+        except Exception as e:
+            print("\\n\\n[Akash AI background task error] " + str(e) + "\\n")
+    threading.Thread(target=worker, daemon=True).start()
+
 def looks_like_web_request(message):
     return bool(re.search(
         r"\b(latest|today|current|recent|news|search the web|look up|what happened|who is|price|weather)\\b",
@@ -284,7 +320,7 @@ def main():
     print("Akash AI — online")
     print(f"Model: {MODEL}")
     print("Memory: enabled | Web: live news + search | Shell: safe mode")
-    print("Commands: /help, /memory, /clear, /web <query>, exit")
+    print("Commands: /help, /memory, /clear, /web <query>, /agent <task>, /background <task>, exit")
 
     while True:
         try:
@@ -310,6 +346,13 @@ def main():
             if message.startswith("/web "):
                 query = message[5:].strip()
                 print(f"\nAkash AI > {search_web(query)}")
+                continue
+            if message.startswith("/agent "):
+                print("\nAkash AI > " + execute_agent_task(message[7:].strip()))
+                continue
+            if message.startswith("/background "):
+                background_task(message[12:].strip())
+                print("\nAkash AI > Background task started.")
                 continue
             print(f"\nAkash AI > {chat(message)}")
         except KeyboardInterrupt:
