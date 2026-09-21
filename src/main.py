@@ -257,7 +257,8 @@ Prefer a complete small product over a large unfinished architecture."""
 
 def execute_agent_task(task):
     messages = [{"role": "system", "content": AGENT_SYSTEM}, {"role": "user", "content": task}]
-    for _ in range(8):
+    max_steps = 16 if "build" in task.lower() else 8
+    for _ in range(max_steps):
         assistant = request_model(messages, use_tools=True)
         calls = assistant.get("tool_calls") or []
         if not calls:
@@ -280,7 +281,7 @@ def execute_agent_task(task):
             except Exception as e:
                 result = f"Tool error: {e}"
             messages.append({"role": "tool", "tool_call_id": call["id"], "content": result})
-    return "Agent reached its safety step limit."
+    return "Agent reached its safety step limit. Partial work remains in the project; run the same build command again to continue from the current state."
 
 def background_task(task):
     def worker():
