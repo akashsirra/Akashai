@@ -228,24 +228,58 @@ TOOLS = [
 def request_model(messages, use_tools=False):
     if not API_KEY:
         raise RuntimeError("OPENROUTER_API_KEY is not configured")
+
     payload = {"model": MODEL, "messages": messages}
     if use_tools:
         payload["tools"] = TOOLS
         payload["tool_choice"] = "auto"
-    r = httpx.post(
-        API_URL,
-        headers={
-            "Authorization": f"Bearer {API_KEY}",
-            "Content-Type": "application/json",
-            "HTTP-Referer": "https://github.com/akashsirra/Akashai",
-            "X-Title": "Akash AI",
-        },
-        json=payload,
-        timeout=TIMEOUT,
-    )
-    r.raise_for_status()
-    data = r.json()
-    return data["choices"][0]["message"]
+
+    headers = {
+        "Authorization": f"Bearer {API_KEY}",
+        "Content-Type": "application/json",
+        "HTTP-Referer": "https://github.com/akashsirra/Akashai",
+        "X-Title": "Akash AI",
+    }
+
+    # Free OpenRouter routing can briefly return 429s when a provider is busy.
+    # Retry a couple of times, respecting Retry-After, but never spin in a
+    # tight loop because failed free-tier requests can count toward quotas.
+    last_error = None
+    for attempt in range(3):
+        try:
+            r = httpx.post(
+                API_URL,
+                headers=headers,
+                json=payload,
+                timeout=TIMEOUT,
+            )
+            if r.status_code == 429:
+                retry_after = r.headers.get("Retry-After", "")
+                try:
+                    delay = min(float(retry_after), 15.0) if retry_after else (2.0 * (attempt + 1))
+                except ValueError:
+                    delay = 2.0 * (attempt + 1)
+                last_error = f"OpenRouter rate limited (429). Retry-After={retry_after or 'not provided'}"
+                if attempt < 2:
+                    import time
+                    time.sleep(delay)
+                    continue
+                raise RuntimeError(
+                    "OpenRouter returned 429 after retries. "
+                    "The free account may have hit its request/rate limit; "
+                    "wait for the limit to reset and run the build again."
+                )
+            r.raise_for_status()
+            data = r.json()
+            return data["choices"][0]["message"]
+        except httpx.HTTPStatusError as e:
+            last_error = str(e)
+            if e.response.status_code == 429 and attempt < 2:
+                import time
+                time.sleep(2.0 * (attempt + 1))
+                continue
+            raise
+    raise RuntimeError(last_error or "OpenRouter request failed")
 
 
 # --- Autonomous agent ------------------------------------------------------
