@@ -1,30 +1,49 @@
 # Akash AI
 
-Personal AI assistant built for Akash.
+A personal Grok-style AI assistant built for Android/Termux.
 
-## Vision
+## Features
+- OpenRouter chat with configurable models
+- Persistent conversation memory
+- Long-term facts (/remember)
+- Live news research via Google News RSS
+- General web search
+- Autonomous multi-step agent
+- Background tasks
+- Safe local shell tools
+- Mobile-friendly local web UI
+- SQLite local storage
+- No framework-heavy server required
 
-Akash AI is designed to become a fast, personal, tool-using AI assistant with:
+## Setup
 
-- Natural conversation
-- Persistent memory
-- Web research
-- File and system tools
-- Multi-step agent execution
-- MCP integrations
-- Multiple AI model providers
-- Android/Termux support
-- A future native/web interface
+    git clone https://github.com/akashsirra/Akashai.git
+    cd Akashai
+    python -m venv .venv
+    source .venv/bin/activate
+    pip install -r requirements.txt
+    cp .env.example .env
+
+Set OPENROUTER_API_KEY in .env.
+
+## Run
+
+    source .venv/bin/activate
+    python src/main.py
+
+Inside the CLI, run /webui and open http://127.0.0.1:8787.
+
+## Commands
+- /web <query> — direct web search
+- /agent <task> — autonomous multi-step task
+- /background <task> — run a task in the background
+- /remember <fact> — save a long-term fact
+- /memory — inspect stored memory
+- /clear — clear conversation and facts
+- /webui — launch the mobile web interface
+- /help — show commands
 
 ## Architecture
+Akash AI -> OpenRouter -> memory -> live web/news -> tool agent -> safe shell -> background worker -> Android web UI
 
-```text
-Akash AI
-├── Chat
-├── Memory
-├── Agent
-├── Tools
-├── Web
-├── Models
-├── MCP
-└── Interface
+The product is local-first: conversation memory stays in memory.db on the device unless you explicitly add external integrations.
