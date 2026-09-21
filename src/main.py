@@ -21,6 +21,8 @@ Be concise, practical, proactive, and honest.
 Use clear English or Telugu-English naturally based on Akash's style.
 You can search the public web and use safe local tools.
 For tasks requiring tools, actually use them instead of pretending.
+After receiving useful tool results, synthesize the answer instead of repeatedly calling the same tool.
+For web questions, normally one good search is enough; only search again if the first result is empty or clearly insufficient.
 Never claim an action was completed unless it actually happened.
 When web results are used, mention relevant source URLs briefly."""
 
@@ -104,7 +106,8 @@ def request_model(messages):
 def chat(message: str) -> str:
     messages = [{"role": "system", "content": SYSTEM}, *get_recent_messages(20),
                 {"role": "user", "content": message}]
-    for _ in range(5):
+    used_calls = set()
+    for _ in range(8):
         assistant = request_model(messages)
         calls = assistant.get("tool_calls") or []
         if not calls:
@@ -115,12 +118,19 @@ def chat(message: str) -> str:
         messages.append(assistant)
         for call in calls:
             try:
-                args = json.loads(call["function"].get("arguments") or "{}")
-                result = execute_tool(call["function"]["name"], args)
+                name = call["function"]["name"]
+                raw_args = call["function"].get("arguments") or "{}"
+                args = json.loads(raw_args)
+                call_key = (name, json.dumps(args, sort_keys=True))
+                if call_key in used_calls:
+                    result = "This exact tool call was already executed. Use the existing result and answer the user."
+                else:
+                    used_calls.add(call_key)
+                    result = execute_tool(name, args)
             except Exception as e:
                 result = f"Tool error: {e}"
             messages.append({"role":"tool", "tool_call_id":call["id"], "content":result})
-    return "I reached the tool-step limit before completing the task."
+    return "I could not complete the tool-assisted task within the agent limit. The available tool results were gathered, but the model did not produce a final answer."
 
 def main():
     init_db()
