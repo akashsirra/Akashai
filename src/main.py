@@ -4,7 +4,7 @@ import re
 import subprocess
 import xml.etree.ElementTree as ET
 from html import unescape
-from urllib.parse import quote, urljoin
+from urllib.parse import quote
 
 import httpx
 from dotenv import load_dotenv
@@ -30,7 +30,7 @@ For current/latest/news questions, prefer recent dated sources and clearly say w
 def clean_html(text):
     text = re.sub(r"<script.*?</script>|<style.*?</style>", " ", text or "", flags=re.S | re.I)
     text = re.sub(r"<[^>]+>", " ", text)
-    return re.sub(r"\\s+", " ", unescape(text)).strip()
+    return re.sub(r"\s+", " ", unescape(text)).strip()
 
 def fetch_url(url, limit=12000):
     r = httpx.get(
@@ -120,7 +120,7 @@ def web_search(query, max_results=6):
     return news_search(query, max_results)
 
 def search_web(query, max_results=6):
-    news_words = r"\\b(latest|today|current|recent|news|headline|headlines|what happened)\\b"
+    news_words = r"\b(latest|today|current|recent|news|headline|headlines|what happened)\\b"
     if re.search(news_words, query, re.I):
         try:
             return news_search(query, max_results)
@@ -136,10 +136,10 @@ def search_web(query, max_results=6):
 
 def run_shell(command):
     blocked = [
-        r"\\brm\\s+-rf\\b", r"\\bmkfs\\b", r"\\bdd\\s+if=",
-        r":\\(\\)\\s*\\{", r"\\bshutdown\\b", r"\\breboot\\b",
-        r"\\bpoweroff\\b", r"\\bgit\\s+push\\s+--force\\b",
-        r"\\bgit\\s+reset\\s+--hard\\b",
+        r"\brm\\s+-rf\\b", r"\bmkfs\\b", r"\bdd\\s+if=",
+        r":\\(\\)\\s*\\{", r"\bshutdown\\b", r"\breboot\\b",
+        r"\bpoweroff\\b", r"\bgit\\s+push\\s+--force\\b",
+        r"\bgit\\s+reset\\s+--hard\\b",
     ]
     if any(re.search(p, command, re.I) for p in blocked):
         return "BLOCKED: potentially destructive command."
@@ -208,7 +208,7 @@ def request_model(messages, use_tools=False):
 
 def looks_like_web_request(message):
     return bool(re.search(
-        r"\\b(latest|today|current|recent|news|search the web|look up|what happened|who is|price|weather)\\b",
+        r"\b(latest|today|current|recent|news|search the web|look up|what happened|who is|price|weather)\\b",
         message,
         re.I,
     ))
