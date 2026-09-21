@@ -34,6 +34,8 @@ Set OPENROUTER_API_KEY in .env.
 Inside the CLI, run /webui and open http://127.0.0.1:8787.
 
 ## Commands
+- /money — research and package one monetizable software opportunity
+- /money <problem> — research a specific problem and prepare a launch package
 - /web <query> — direct web search
 - /agent <task> — autonomous multi-step task
 - /background <task> — run a task in the background
@@ -44,6 +46,6 @@ Inside the CLI, run /webui and open http://127.0.0.1:8787.
 - /help — show commands
 
 ## Architecture
-Akash AI -> OpenRouter -> memory -> live web/news -> tool agent -> safe shell -> background worker -> Android web UI
+Akash AI -> OpenRouter -> memory -> live web/news -> Money Factory -> tool agent -> safe shell -> background worker -> Android web UI
 
 The product is local-first: conversation memory stays in memory.db on the device unless you explicitly add external integrations.
