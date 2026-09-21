@@ -322,7 +322,7 @@ def main():
     print("Akash AI — online")
     print(f"Model: {MODEL}")
     print("Memory: enabled | Web: live news + search | Shell: safe mode")
-    print("Commands: /help, /memory, /remember <fact>, /clear, /web <query>, /agent <task>, /background <task>, /webui, exit")
+    print("Commands: /help, /money, /money <problem>, /memory, /remember <fact>, /clear, /web <query>, /agent <task>, /background <task>, /webui, exit")
 
     while True:
         try:
@@ -331,6 +331,17 @@ def main():
                 continue
             if message.lower() in {"exit", "quit"}:
                 break
+            if message == "/money":
+                from money import run as run_money_factory
+                print("\nAkash AI > Money Factory started. Researching a real problem and preparing a launch package...")
+                print(run_money_factory())
+                continue
+            if message.startswith("/money "):
+                from money import run as run_money_factory
+                topic = message[7:].strip()
+                print("\nAkash AI > Money Factory started for: " + topic)
+                print(run_money_factory(topic))
+                continue
             if message == "/help":
                 print("\nAsk normally. Examples:")
                 print("  What is the latest OpenAI news?")
