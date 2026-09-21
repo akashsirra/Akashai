@@ -33,10 +33,15 @@ def market_research(topic=None):
     ]
     blocks = []
     for query in queries:
-        try:
-            blocks.append(f"QUERY: {query}\n{search_web(query, 5)}")
-        except Exception as exc:
-            blocks.append(f"QUERY: {query}\nERROR: {exc}")
+        result = ""
+        for _ in range(3):
+            try:
+                result = search_web(query, 4)
+                if result:
+                    break
+            except Exception as exc:
+                result = f"ERROR: {exc}"
+        blocks.append(f"QUERY: {query}\n{result or 'No results returned.'}")
     return "\n\n".join(blocks)
 
 
@@ -62,7 +67,10 @@ Return:
 Use source URLs from the research where available. Do not claim validation that the
 research does not establish. The goal is a testable business, not guaranteed income.
 """
-    plan = model(prompt)
+    try:
+        plan = model(prompt)
+    except Exception as exc:
+        plan = f"# Research package could not reach the model on the first attempt\n\nError: {exc}\n\nRetry /money after network recovery."
     stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
     (MONEY_DIR / f"plan-{stamp}.md").write_text("# Akash AI Money Factory\n\n" + plan + "\n", encoding="utf-8")
     (MONEY_DIR / "latest-plan.md").write_text("# Akash AI Money Factory\n\n" + plan + "\n", encoding="utf-8")
@@ -87,7 +95,10 @@ Produce:
 Keep everything concrete and small enough for a solo developer. Do not fabricate
 testimonials, users, revenue, partnerships, or guarantees.
 """
-    assets = model(prompt)
+    try:
+        assets = model(prompt)
+    except Exception as exc:
+        assets = f"# Launch assets temporarily unavailable\n\nError: {exc}\n\nThe market plan was still saved. Retry /money to generate launch assets."
     (MONEY_DIR / "launch-assets.md").write_text("# Launch Assets\n\n" + assets + "\n", encoding="utf-8")
     return assets
 
