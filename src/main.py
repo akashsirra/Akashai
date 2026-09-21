@@ -86,7 +86,7 @@ def execute_tool(name, arguments):
         return run_shell(arguments["command"])
     return f"Unknown tool: {name}"
 
-def request_model(messages):
+def request_model(messages, use_tools=True):
     if not API_KEY:
         raise RuntimeError("OPENROUTER_API_KEY is not configured")
     r = httpx.post(
@@ -97,7 +97,7 @@ def request_model(messages):
             "HTTP-Referer": "https://github.com/akashsirra/Akashai",
             "X-Title": "Akash AI",
         },
-        json={"model": MODEL, "messages": messages, "tools": TOOLS, "tool_choice": "auto"},
+        json={**{"model": MODEL, "messages": messages}, **({"tools": TOOLS, "tool_choice": "auto"} if use_tools else {})},
         timeout=120,
     )
     r.raise_for_status()
@@ -106,6 +106,36 @@ def request_model(messages):
 def chat(message: str) -> str:
     messages = [{"role": "system", "content": SYSTEM}, *get_recent_messages(20),
                 {"role": "user", "content": message}]
+
+    # Reliable fast path for web/current-information requests.
+    # Some free OpenRouter models are inconsistent with native tool calling,
+    # so do the search deterministically and ask the model only to synthesize.
+    web_intent = re.search(
+        r"\b(latest|today|current|recent|news|search the web|look up|what happened|who is)\b",
+        message,
+        re.I,
+    )
+    if web_intent:
+        try:
+            web_results = search_web(message, 5)
+            messages.append({
+                "role": "system",
+                "content": "Web search results are below. Use them to answer the user's request. "
+                           "Cite the source URLs shown in the results. Do not call another tool unless "
+                           "the results are clearly empty.\n\n" + web_results,
+            })
+            assistant = request_model(messages, use_tools=False)
+            answer = assistant.get("content") or ""
+            if answer:
+                save_message("user", message)
+                save_message("assistant", answer)
+                return answer
+        except Exception as e:
+            messages.append({
+                "role": "system",
+                "content": f"Web search failed: {e}. Answer honestly without pretending you searched."
+            })
+
     used_calls = set()
     for _ in range(8):
         assistant = request_model(messages)
