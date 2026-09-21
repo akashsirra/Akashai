@@ -27,22 +27,72 @@ Never claim an action was completed unless it actually happened.
 When web results are used, mention relevant source URLs briefly."""
 
 def search_web(query: str, max_results: int = 5) -> str:
-    url = "https://html.duckduckgo.com/html/?q=" + quote(query)
-    r = httpx.get(url, headers={"User-Agent": "Mozilla/5.0 AkashAI/0.1"},
-                  timeout=20, follow_redirects=True)
-    r.raise_for_status()
-    blocks = re.findall(r'<div class="result__body".*?</div>\s*</div>', r.text, re.S)
-    results = []
-    for block in blocks[:max_results]:
-        m = re.search(r'class="result__a"[^>]*href="([^"]+)"[^>]*>(.*?)</a>', block, re.S)
-        if not m:
-            continue
-        link = unescape(m.group(1))
-        title = unescape(re.sub(r"<.*?>", "", m.group(2))).strip()
-        sm = re.search(r'class="result__snippet"[^>]*>(.*?)</(?:a|div)>', block, re.S)
-        snippet = unescape(re.sub(r"<.*?>", "", sm.group(1))).strip() if sm else ""
-        results.append(f"{len(results)+1}. {title}\n   {link}\n   {snippet}")
-    return "\n\n".join(results) if results else "No web results found."
+    """Return compact search results from public HTML search endpoints."""
+    headers = {"User-Agent": "Mozilla/5.0 (Linux; Android 16) AkashAI/0.1"}
+    engines = [
+        ("https://html.duckduckgo.com/html/?q=", "ddg"),
+        ("https://www.google.com/search?q=", "google"),
+    ]
+    last_error = None
+
+    for base, engine in engines:
+        try:
+            r = httpx.get(
+                base + quote(query),
+                headers=headers,
+                timeout=20,
+                follow_redirects=True,
+            )
+            r.raise_for_status()
+            html = r.text
+            results = []
+
+            if engine == "ddg":
+                matches = re.findall(
+                    r'<a[^>]+class="result__a"[^>]+href="([^"]+)"[^>]*>(.*?)</a>',
+                    html,
+                    re.S | re.I,
+                )
+                snippets = re.findall(
+                    r'<(?:a|div)[^>]+class="result__snippet"[^>]*>(.*?)</(?:a|div)>',
+                    html,
+                    re.S | re.I,
+                )
+                for i, (link, title_html) in enumerate(matches[:max_results]):
+                    title = unescape(re.sub(r"<.*?>", "", title_html)).strip()
+                    link = unescape(link)
+                    snippet = ""
+                    if i < len(snippets):
+                        snippet = unescape(re.sub(r"<.*?>", "", snippets[i])).strip()
+                    if title and link:
+                        results.append(f"{len(results)+1}. {title}\n   {link}\n   {snippet}")
+
+            else:
+                # Google result pages commonly expose result links as /url?q=...
+                matches = re.findall(
+                    r'<a[^>]+href="(/url\\?q=[^"]+)"[^>]*>(.*?)</a>',
+                    html,
+                    re.S | re.I,
+                )
+                seen = set()
+                for link, title_html in matches:
+                    link = unescape(link)
+                    m = re.search(r"/url\\?q=([^&]+)", link)
+                    real = unescape(m.group(1)) if m else link
+                    title = unescape(re.sub(r"<.*?>", "", title_html)).strip()
+                    if real.startswith("http") and title and real not in seen:
+                        seen.add(real)
+                        results.append(f"{len(results)+1}. {title}\n   {real}")
+                        if len(results) >= max_results:
+                            break
+
+            if results:
+                return "\n\n".join(results)
+
+        except Exception as e:
+            last_error = e
+
+    return f"No web results found. Search error: {last_error}" if last_error else "No web results found."
 
 def run_shell(command: str) -> str:
     blocked = [
