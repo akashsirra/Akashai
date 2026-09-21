@@ -95,7 +95,7 @@ def web_search(query, max_results=6):
             results = []
             # Works with several DDG markup variants.
             pattern = re.compile(
-                r'<a[^>]+href=["\\']([^"\\']+)["\\'][^>]*>(.*?)</a>',
+                r"""<a[^>]+href=["']([^"']+)["'][^>]*>(.*?)</a>""",
                 re.S | re.I,
             )
             for link, title_html in pattern.findall(html):
