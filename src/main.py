@@ -16,7 +16,10 @@ load_dotenv()
 
 API_KEY = os.getenv("OPENROUTER_API_KEY", "").strip()
 MODEL = os.getenv("OPENROUTER_MODEL", "openrouter/free").strip()
+GROQ_API_KEY = os.getenv("GROQ_API_KEY", "").strip()
+GROQ_MODEL = os.getenv("GROQ_MODEL", "openai/gpt-oss-120b").strip()
 API_URL = "https://openrouter.ai/api/v1/chat/completions"
+GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions"
 TIMEOUT = 90
 
 SYSTEM = """You are Akash AI, Akash's personal AI assistant.
@@ -226,60 +229,68 @@ TOOLS = [
 ]
 
 def request_model(messages, use_tools=False):
-    if not API_KEY:
-        raise RuntimeError("OPENROUTER_API_KEY is not configured")
+    if not API_KEY and not GROQ_API_KEY:
+        raise RuntimeError("No AI provider configured. Set OPENROUTER_API_KEY or GROQ_API_KEY.")
 
     payload = {"model": MODEL, "messages": messages}
     if use_tools:
         payload["tools"] = TOOLS
         payload["tool_choice"] = "auto"
 
-    headers = {
-        "Authorization": f"Bearer {API_KEY}",
-        "Content-Type": "application/json",
-        "HTTP-Referer": "https://github.com/akashsirra/Akashai",
-        "X-Title": "Akash AI",
-    }
+    # Prefer OpenRouter, but automatically fail over to Groq when OpenRouter
+    # is rate-limited. This keeps the builder usable without asking the user
+    # to manually switch providers.
+    providers = []
+    if API_KEY:
+        providers.append((
+            "OpenRouter",
+            API_URL,
+            API_KEY,
+            {
+                "HTTP-Referer": "https://github.com/akashsirra/Akashai",
+                "X-Title": "Akash AI",
+            },
+            MODEL,
+        ))
+    if GROQ_API_KEY:
+        providers.append((
+            "Groq",
+            GROQ_API_URL,
+            GROQ_API_KEY,
+            {},
+            GROQ_MODEL,
+        ))
 
-    # Free OpenRouter routing can briefly return 429s when a provider is busy.
-    # Retry a couple of times, respecting Retry-After, but never spin in a
-    # tight loop because failed free-tier requests can count toward quotas.
     last_error = None
-    for attempt in range(3):
+    for provider_name, url, api_key, extra_headers, model in providers:
+        provider_payload = dict(payload)
+        provider_payload["model"] = model
+        headers = {
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json",
+            **extra_headers,
+        }
         try:
-            r = httpx.post(
-                API_URL,
-                headers=headers,
-                json=payload,
-                timeout=TIMEOUT,
-            )
+            r = httpx.post(url, headers=headers, json=provider_payload, timeout=TIMEOUT)
             if r.status_code == 429:
-                retry_after = r.headers.get("Retry-After", "")
-                try:
-                    delay = min(float(retry_after), 15.0) if retry_after else (2.0 * (attempt + 1))
-                except ValueError:
-                    delay = 2.0 * (attempt + 1)
-                last_error = f"OpenRouter rate limited (429). Retry-After={retry_after or 'not provided'}"
-                if attempt < 2:
-                    import time
-                    time.sleep(delay)
-                    continue
-                raise RuntimeError(
-                    "OpenRouter returned 429 after retries. "
-                    "The free account may have hit its request/rate limit; "
-                    "wait for the limit to reset and run the build again."
-                )
+                last_error = f"{provider_name} returned 429 Too Many Requests"
+                continue
             r.raise_for_status()
             data = r.json()
             return data["choices"][0]["message"]
         except httpx.HTTPStatusError as e:
-            last_error = str(e)
-            if e.response.status_code == 429 and attempt < 2:
-                import time
-                time.sleep(2.0 * (attempt + 1))
+            last_error = f"{provider_name}: {e}"
+            # A rate limit or unavailable provider should allow the next
+            # configured provider to take over.
+            if e.response.status_code in {429, 502, 503, 504}:
                 continue
             raise
-    raise RuntimeError(last_error or "OpenRouter request failed")
+
+    raise RuntimeError(
+        (last_error or "All configured AI providers failed.")
+        + ". Configure another provider or wait for the rate limit to reset."
+    )
+
 
 
 # --- Autonomous agent ------------------------------------------------------
