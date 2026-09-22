@@ -7,14 +7,17 @@ GPT-OSS proxy. The endpoint URL is configured through environment variables.
 import os
 import httpx
 
-AI_COMPAT_URL = os.getenv("AI_COMPAT_URL", "").strip().rstrip("/")
-AI_COMPAT_API_KEY = os.getenv("AI_COMPAT_API_KEY", "").strip()
-AI_COMPAT_MODEL = os.getenv("AI_COMPAT_MODEL", "gpt-oss-120b").strip()
-AI_COMPAT_TIMEOUT = float(os.getenv("AI_COMPAT_TIMEOUT", "120"))
+def _settings():
+    return (
+        os.getenv("AI_COMPAT_URL", "").strip().rstrip("/"),
+        os.getenv("AI_COMPAT_API_KEY", "").strip(),
+        os.getenv("AI_COMPAT_MODEL", "gpt-oss-120b").strip(),
+        float(os.getenv("AI_COMPAT_TIMEOUT", "120")),
+    )
 
 
 def configured() -> bool:
-    return bool(AI_COMPAT_URL)
+    return bool(_settings()[0])
 
 
 def chat(messages, *, timeout=None):
@@ -23,19 +26,20 @@ def chat(messages, *, timeout=None):
     This is intentionally separate from the main provider loop so AkashAI can
     use free/self-hosted endpoints without requiring a vendor API key.
     """
-    if not AI_COMPAT_URL:
+    ai_url, api_key, model, default_timeout = _settings()
+    if not ai_url:
         raise RuntimeError("AI_COMPAT_URL is not configured.")
 
-    url = AI_COMPAT_URL
+    url = ai_url
     if not url.endswith("/chat/completions"):
         url += "/chat/completions"
 
     headers = {"Content-Type": "application/json"}
-    if AI_COMPAT_API_KEY:
-        headers["Authorization"] = f"Bearer {AI_COMPAT_API_KEY}"
+    if api_key:
+        headers["Authorization"] = f"Bearer {api_key}"
 
     payload = {
-        "model": AI_COMPAT_MODEL,
+        "model": model,
         "messages": messages,
         "stream": False,
     }
@@ -44,7 +48,7 @@ def chat(messages, *, timeout=None):
         url,
         headers=headers,
         json=payload,
-        timeout=timeout or AI_COMPAT_TIMEOUT,
+        timeout=timeout or default_timeout,
     )
     r.raise_for_status()
     data = r.json()
