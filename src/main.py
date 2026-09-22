@@ -223,11 +223,10 @@ TOOLS = [
             "parameters": {
                 "type": "object",
                 "properties": {"command": {"type": "string"}},
-                     "required": ["command"],
-                 },
-             },
-         },
-     },
+                "required": ["command"],
+            },
+        },
+    },
 ]
 
 def request_model(messages, use_tools=False):
