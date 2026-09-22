@@ -9,9 +9,15 @@ from urllib.parse import quote
 
 import httpx
 from dotenv import load_dotenv
-from gptoss import configured as gptoss_configured, chat as gptoss_chat
+try:
+    from .gptoss import configured as gptoss_configured, chat as gptoss_chat
+except ImportError:
+    from gptoss import configured as gptoss_configured, chat as gptoss_chat
 
-from memory import init_db, save_message, get_recent_messages, get_facts, clear_memory
+try:
+    from .memory import init_db, save_message, get_recent_messages, get_facts, clear_memory
+except ImportError:
+    from memory import init_db, save_message, get_recent_messages, get_facts, clear_memory
 
 load_dotenv()
 
