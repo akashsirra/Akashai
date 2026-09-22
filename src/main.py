@@ -295,8 +295,6 @@ TOOLS = [
         (last_error or "All configured AI providers failed.")
         + ". Configure another provider or wait for the rate limit to reset."
     )
- Configure another provider or wait for the rate limit to reset."
-    )
 
 
 
