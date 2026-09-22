@@ -223,7 +223,14 @@ TOOLS = [
             "parameters": {
                 "type": "object",
                 "properties": {"command": {"type": "string"}},
-     def request_model(messages, use_tools=False):
+                     "required": ["command"],
+                 },
+             },
+         },
+     },
+]
+
+def request_model(messages, use_tools=False):
     # A personal OpenAI-compatible GPT-OSS endpoint can be used without a
     # vendor API key. The current gptoss-proxy exposes chat completions but
     # does not implement OpenAI tool_calls, so tool-driven company work keeps
