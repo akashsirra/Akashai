@@ -9,6 +9,7 @@ from urllib.parse import quote
 
 import httpx
 from dotenv import load_dotenv
+from gptoss import configured as gptoss_configured, chat as gptoss_chat
 
 from memory import init_db, save_message, get_recent_messages, get_facts, clear_memory
 
@@ -222,24 +223,30 @@ TOOLS = [
             "parameters": {
                 "type": "object",
                 "properties": {"command": {"type": "string"}},
-                "required": ["command"],
-            },
-        },
-    },
-]
+     def request_model(messages, use_tools=False):
+    # A personal OpenAI-compatible GPT-OSS endpoint can be used without a
+    # vendor API key. The current gptoss-proxy exposes chat completions but
+    # does not implement OpenAI tool_calls, so tool-driven company work keeps
+    # using the providers below.
+    if gptoss_configured() and not use_tools:
+        try:
+            return gptoss_chat(messages)
+        except Exception:
+            # Fall through to configured vendor providers.
+            pass
 
-def request_model(messages, use_tools=False):
     if not API_KEY and not GROQ_API_KEY:
-        raise RuntimeError("No AI provider configured. Set OPENROUTER_API_KEY or GROQ_API_KEY.")
+        if gptoss_configured():
+            raise RuntimeError(
+                "GPT-OSS endpoint failed. Check AI_COMPAT_URL or its upstream service."
+            )
+        raise RuntimeError("No AI provider configured. Set AI_COMPAT_URL, OPENROUTER_API_KEY, or GROQ_API_KEY.")
 
     payload = {"model": MODEL, "messages": messages}
     if use_tools:
         payload["tools"] = TOOLS
         payload["tool_choice"] = "auto"
 
-    # Prefer OpenRouter, but automatically fail over to Groq when OpenRouter
-    # is rate-limited. This keeps the builder usable without asking the user
-    # to manually switch providers.
     providers = []
     if API_KEY:
         providers.append((
@@ -280,8 +287,6 @@ def request_model(messages, use_tools=False):
             return data["choices"][0]["message"]
         except httpx.HTTPStatusError as e:
             last_error = f"{provider_name}: {e}"
-            # A rate limit or unavailable provider should allow the next
-            # configured provider to take over.
             if e.response.status_code in {429, 502, 503, 504}:
                 continue
             raise
@@ -289,6 +294,8 @@ def request_model(messages, use_tools=False):
     raise RuntimeError(
         (last_error or "All configured AI providers failed.")
         + ". Configure another provider or wait for the rate limit to reset."
+    )
+ Configure another provider or wait for the rate limit to reset."
     )
 
 
