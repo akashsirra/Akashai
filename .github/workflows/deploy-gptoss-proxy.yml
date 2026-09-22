@@ -1,0 +1,31 @@
+name: Deploy GPT-OSS Proxy
+
+on:
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout AkashAI
+        uses: actions/checkout@v4
+
+      - name: Fetch GPT-OSS proxy
+        run: |
+          git clone --depth 1 https://github.com/junioralive/gptoss-proxy.git /tmp/gptoss-proxy
+
+      - name: Deploy Worker
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: /tmp/gptoss-proxy
+          command: deploy --name akashai-gptoss-proxy
+
+      - name: Print endpoint
+        run: |
+          echo "GPT-OSS endpoint:"
+          echo "https://akashai-gptoss-proxy.${{ secrets.CLOUDFLARE_WORKERS_SUBDOMAIN }}.workers.dev/v1"
